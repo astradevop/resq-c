@@ -5,12 +5,13 @@ from app.database import get_db
 from app.models import IncidentReport, User, TaskStatus
 from app.schemas import IncidentReportCreate, IncidentReportResponse, IncidentReportUpdate
 from app.auth import get_current_user, get_current_citizen, get_current_admin
+from app.socketio_server import emit_incident_created
 
 router = APIRouter(prefix="/incidents", tags=["Incident Reports"])
 
 
 @router.post("/", response_model=IncidentReportResponse)
-def create_incident_report(
+async def create_incident_report(
     incident_data: IncidentReportCreate,
     current_user: User = Depends(get_current_citizen),
     db: Session = Depends(get_db)
@@ -33,7 +34,11 @@ def create_incident_report(
     db.commit()
     db.refresh(incident)
     
-    return IncidentReportResponse.model_validate(incident)
+    # Emit socket event
+    incident_response = IncidentReportResponse.model_validate(incident)
+    await emit_incident_created(incident_response.model_dump(mode='json'))
+    
+    return incident_response
 
 
 @router.get("/", response_model=List[IncidentReportResponse])

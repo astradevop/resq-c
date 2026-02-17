@@ -9,8 +9,10 @@ from app.auth import get_current_user, get_current_citizen, get_current_admin
 router = APIRouter(prefix="/sos", tags=["SOS Requests"])
 
 
+from app.socketio_server import emit_sos_created
+
 @router.post("/", response_model=SOSRequestResponse)
-def create_sos_request(
+async def create_sos_request(
     sos_data: SOSRequestCreate,
     current_user: User = Depends(get_current_citizen),
     db: Session = Depends(get_db)
@@ -29,7 +31,11 @@ def create_sos_request(
     db.commit()
     db.refresh(sos)
     
-    return SOSRequestResponse.model_validate(sos)
+    # Emit socket event
+    sos_response = SOSRequestResponse.model_validate(sos)
+    await emit_sos_created(sos_response.model_dump(mode='json'))
+    
+    return sos_response
 
 
 @router.get("/", response_model=List[SOSRequestResponse])

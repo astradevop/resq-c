@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models import Task, User, SOSRequest, IncidentReport, TaskStatus, UserRole, VolunteerStatus
 from app.schemas import TaskCreate, TaskResponse, TaskUpdate
 from app.auth import get_current_user, get_current_admin, get_current_volunteer
+from app.socketio_server import emit_task_assigned, emit_task_updated
 import math
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
@@ -27,7 +28,7 @@ def calculate_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> fl
 
 
 @router.post("/", response_model=TaskResponse)
-def create_task(
+async def create_task(
     task_data: TaskCreate,
     current_user: User = Depends(get_current_admin),
     db: Session = Depends(get_db)
@@ -86,7 +87,11 @@ def create_task(
     db.commit()
     db.refresh(task)
     
-    return TaskResponse.model_validate(task)
+    # Emit socket event
+    task_response = TaskResponse.model_validate(task)
+    await emit_task_assigned(task_response.model_dump(mode='json'), task.volunteer_id)
+    
+    return task_response
 
 
 @router.get("/", response_model=List[TaskResponse])
@@ -235,7 +240,7 @@ def get_task(
 
 
 @router.put("/{task_id}", response_model=TaskResponse)
-def update_task(
+async def update_task(
     task_id: int,
     update_data: TaskUpdate,
     current_user: User = Depends(get_current_user),
@@ -285,7 +290,17 @@ def update_task(
     db.commit()
     db.refresh(task)
     
-    return TaskResponse.model_validate(task)
+    # Emit socket event
+    task_response = TaskResponse.model_validate(task)
+    user_ids = [task.volunteer_id]
+    if task.sos_request:
+        user_ids.append(task.sos_request.citizen_id)
+    if task.incident_report:
+        user_ids.append(task.incident_report.citizen_id)
+        
+    await emit_task_updated(task_response.model_dump(mode='json'), user_ids)
+    
+    return task_response
 
 
 @router.delete("/{task_id}")

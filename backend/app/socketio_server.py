@@ -103,20 +103,27 @@ async def emit_incident_created(incident_data: dict):
 
 
 async def emit_task_assigned(task_data: dict, volunteer_id: int):
-    """Emit task assigned event to volunteer"""
+    """Emit task assigned event to volunteer and admins"""
+    # Notify volunteer
     if volunteer_id in connected_users:
         for sid in connected_users[volunteer_id]:
             await sio.emit('task_assigned', task_data, room=sid)
-        print(f"Emitted task assigned to volunteer {volunteer_id}")
+    
+    # Notify admins
+    await sio.emit('task_assigned', task_data, room='admin')
+    print(f"Emitted task assigned to volunteer {volunteer_id} and admins")
 
 
 async def emit_task_updated(task_data: dict, user_ids: list):
-    """Emit task update to relevant users"""
+    """Emit task update to relevant users and admins"""
     for user_id in user_ids:
         if user_id and user_id in connected_users:
             for sid in connected_users[user_id]:
                 await sio.emit('task_updated', task_data, room=sid)
-    print(f"Emitted task updated to users: {user_ids}")
+    
+    # Notify admins
+    await sio.emit('task_updated', task_data, room='admin')
+    print(f"Emitted task updated to users: {user_ids} and admins")
 
 
 async def emit_broadcast(broadcast_data: dict):
